@@ -3,7 +3,8 @@
  * Magic Genie CLI — minimal CLI for agent use.
  *
  * Usage:
- *   magic-genie catalog                          List capabilities (JSON)
+ *   magic-genie catalog                          List all capabilities (JSON)
+ *   magic-genie search <query> [options]         Search capabilities by keyword
  *   magic-genie run <persona> <capability> [options]   Run a capability
  *   magic-genie upload <file>                    Upload and get public URL
  *
@@ -68,6 +69,20 @@ async function main() {
       break;
     }
 
+    case "search": {
+      const query = positional[0];
+      if (!query) {
+        console.error("Usage: magic-genie search <query> [--persona <slug>] [--type wish|spell]");
+        process.exit(1);
+      }
+      const results = await client.search(query, {
+        persona: flags["persona"],
+        type: flags["type"] as any,
+      });
+      console.log(JSON.stringify(results, null, 2));
+      break;
+    }
+
     case "upload": {
       const filePath = positional[0];
       if (!filePath) {
@@ -112,8 +127,9 @@ async function main() {
 
     default: {
       console.error(
-        "Usage: magic-genie <catalog|run|upload> [args]\n" +
+        "Usage: magic-genie <catalog|search|run|upload> [args]\n" +
         "  catalog                        List all capabilities\n" +
+        "  search <query>                 Search capabilities by keyword\n" +
         "  run <persona> <capability>     Run a capability\n" +
         "  upload <file>                  Upload a file, get public URL",
       );

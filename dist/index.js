@@ -87,7 +87,7 @@ var MagicGenieClient = class _MagicGenieClient {
       "Content-Type": "application/json"
     };
   }
-  // ── Catalog ──
+  // ── Catalog & Search ──
   /** Fetch the full capability catalog. */
   async catalog() {
     const res = await fetch(`${this.baseUrl}/v1/catalog`, {
@@ -97,6 +97,20 @@ var MagicGenieClient = class _MagicGenieClient {
       throw new Error(`Catalog fetch failed (${res.status}): ${await res.text()}`);
     }
     return res.json();
+  }
+  /**
+   * Search the catalog by keyword. Matches against slug, title, description,
+   * persona_slug, and operator_slug. Case-insensitive.
+   * Optionally filter by persona and/or capability type.
+   */
+  async search(query, opts) {
+    const catalog = await this.catalog();
+    const q = query.toLowerCase();
+    return catalog.capabilities.filter((entry) => {
+      if (opts?.persona && entry.persona_slug !== opts.persona) return false;
+      if (opts?.type && entry.capability_type !== opts.type) return false;
+      return entry.slug.includes(q) || entry.title.toLowerCase().includes(q) || entry.description.toLowerCase().includes(q) || entry.persona_slug.includes(q) || entry.operator_slug.includes(q);
+    });
   }
   // ── Asset Upload ──
   /**

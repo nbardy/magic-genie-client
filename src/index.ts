@@ -189,7 +189,7 @@ export class MagicGenieClient {
     };
   }
 
-  // ── Catalog ──
+  // ── Catalog & Search ──
 
   /** Fetch the full capability catalog. */
   async catalog(): Promise<Catalog> {
@@ -200,6 +200,32 @@ export class MagicGenieClient {
       throw new Error(`Catalog fetch failed (${res.status}): ${await res.text()}`);
     }
     return res.json() as Promise<Catalog>;
+  }
+
+  /**
+   * Search the catalog by keyword. Matches against slug, title, description,
+   * persona_slug, and operator_slug. Case-insensitive.
+   * Optionally filter by persona and/or capability type.
+   */
+  async search(query: string, opts?: {
+    persona?: string;
+    type?: CapabilityType;
+  }): Promise<CatalogEntry[]> {
+    const catalog = await this.catalog();
+    const q = query.toLowerCase();
+
+    return catalog.capabilities.filter((entry) => {
+      if (opts?.persona && entry.persona_slug !== opts.persona) return false;
+      if (opts?.type && entry.capability_type !== opts.type) return false;
+
+      return (
+        entry.slug.includes(q) ||
+        entry.title.toLowerCase().includes(q) ||
+        entry.description.toLowerCase().includes(q) ||
+        entry.persona_slug.includes(q) ||
+        entry.operator_slug.includes(q)
+      );
+    });
   }
 
   // ── Asset Upload ──
