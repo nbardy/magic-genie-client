@@ -2,6 +2,8 @@
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { basename, extname } from "node:path";
 var DEFAULT_INLINE_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+var DEFAULT_VIDEO_JOB_TIMEOUT_MS = 10 * 60 * 1e3;
+var DEFAULT_VIDEO_JOB_POLL_INTERVAL_MS = 5e3;
 function mimeFromExt(filePath) {
   const ext = extname(filePath).toLowerCase();
   const mimeMap = {
@@ -21,6 +23,9 @@ function mimeFromExt(filePath) {
 }
 function isVideoMime(mime) {
   return mime.startsWith("video/");
+}
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 async function readFileAsBase64DataUri(filePath) {
   const buf = await readFile(filePath);
@@ -90,6 +95,11 @@ var MagicGenieClient = class _MagicGenieClient {
     return {
       Authorization: `Bearer ${this.apiKey}`,
       "Content-Type": "application/json"
+    };
+  }
+  authorizationHeaders() {
+    return {
+      Authorization: `Bearer ${this.apiKey}`
     };
   }
   // ── Catalog & Search ──
@@ -194,7 +204,38 @@ var MagicGenieClient = class _MagicGenieClient {
     if (!res.ok) {
       throw new Error(`Run failed (${res.status}): ${await res.text()}`);
     }
-    return res.json();
+    const result = await res.json();
+    if ("jobId" in result && typeof result.jobId === "string" && result.status !== "completed" && result.status !== "failed") {
+      return this.waitForVideoJob(result.jobId);
+    }
+    return result;
+  }
+  /** Poll a queued video job until it completes or fails. */
+  async waitForVideoJob(jobId, opts = {}) {
+    const timeoutMs = opts.timeoutMs ?? DEFAULT_VIDEO_JOB_TIMEOUT_MS;
+    const pollIntervalMs = opts.pollIntervalMs ?? DEFAULT_VIDEO_JOB_POLL_INTERVAL_MS;
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+      const res = await fetch(`${this.baseUrl}/api/video-jobs/${jobId}`, {
+        headers: this.authorizationHeaders()
+      });
+      if (!res.ok) {
+        throw new Error(`Video job status failed (${res.status}): ${await res.text()}`);
+      }
+      const status = await res.json();
+      if (status.status === "failed") {
+        throw new Error(status.error || "Video job failed");
+      }
+      if (status.status === "completed") {
+        return {
+          ...status,
+          resultId: status.resultId ?? null,
+          outputUrl: status.outputUrl ?? null
+        };
+      }
+      await sleep(pollIntervalMs);
+    }
+    throw new Error(`Video job ${jobId} did not complete within ${timeoutMs}ms`);
   }
   // ── Download ──
   /** Download a result asset to a local file path. */

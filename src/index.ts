@@ -55,8 +55,20 @@ export type RunInput = {
 );
 
 export type RunResult = {
-  resultId: string;
-  outputUrl: string;
+  resultId: string | null;
+  outputUrl: string | null;
+  [key: string]: unknown;
+};
+
+export type VideoJobStatus = {
+  jobId: string;
+  status: "queued" | "processing" | "completed" | "failed";
+  stage?: string;
+  progress?: number;
+  detail?: string;
+  resultId?: string | null;
+  outputUrl?: string | null;
+  error?: string | null;
   [key: string]: unknown;
 };
 
@@ -83,6 +95,8 @@ export type ClientConfig = {
 // ── Helpers ────────────────────────────────────────────────────────────
 
 const DEFAULT_INLINE_IMAGE_MAX_BYTES = 10 * 1024 * 1024; // 10MB
+const DEFAULT_VIDEO_JOB_TIMEOUT_MS = 10 * 60 * 1000;
+const DEFAULT_VIDEO_JOB_POLL_INTERVAL_MS = 5000;
 
 function mimeFromExt(filePath: string): string {
   const ext = extname(filePath).toLowerCase();
@@ -104,6 +118,10 @@ function mimeFromExt(filePath: string): string {
 
 function isVideoMime(mime: string): boolean {
   return mime.startsWith("video/");
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function readFileAsBase64DataUri(filePath: string): Promise<string> {
@@ -196,6 +214,12 @@ export class MagicGenieClient {
     return {
       Authorization: `Bearer ${this.apiKey}`,
       "Content-Type": "application/json",
+    };
+  }
+
+  private authorizationHeaders(): Record<string, string> {
+    return {
+      Authorization: `Bearer ${this.apiKey}`,
     };
   }
 
@@ -336,7 +360,56 @@ export class MagicGenieClient {
       throw new Error(`Run failed (${res.status}): ${await res.text()}`);
     }
 
-    return res.json() as Promise<RunResult>;
+    const result = (await res.json()) as RunResult | VideoJobStatus;
+    if (
+      "jobId" in result &&
+      typeof result.jobId === "string" &&
+      result.status !== "completed" &&
+      result.status !== "failed"
+    ) {
+      return this.waitForVideoJob(result.jobId);
+    }
+
+    return result as RunResult;
+  }
+
+  /** Poll a queued video job until it completes or fails. */
+  async waitForVideoJob(
+    jobId: string,
+    opts: {
+      timeoutMs?: number;
+      pollIntervalMs?: number;
+    } = {},
+  ): Promise<RunResult> {
+    const timeoutMs = opts.timeoutMs ?? DEFAULT_VIDEO_JOB_TIMEOUT_MS;
+    const pollIntervalMs = opts.pollIntervalMs ?? DEFAULT_VIDEO_JOB_POLL_INTERVAL_MS;
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < timeoutMs) {
+      const res = await fetch(`${this.baseUrl}/api/video-jobs/${jobId}`, {
+        headers: this.authorizationHeaders(),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Video job status failed (${res.status}): ${await res.text()}`);
+      }
+
+      const status = (await res.json()) as VideoJobStatus;
+      if (status.status === "failed") {
+        throw new Error(status.error || "Video job failed");
+      }
+      if (status.status === "completed") {
+        return {
+          ...status,
+          resultId: status.resultId ?? null,
+          outputUrl: status.outputUrl ?? null,
+        };
+      }
+
+      await sleep(pollIntervalMs);
+    }
+
+    throw new Error(`Video job ${jobId} did not complete within ${timeoutMs}ms`);
   }
 
   // ── Download ──
