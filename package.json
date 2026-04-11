@@ -1,0 +1,21 @@
+{
+  "name": "magic-genie-client",
+  "version": "0.1.0",
+  "description": "Thin client for the Magic Genie API. Handles auth, local file upload (base64 for images, signed URLs for videos), and catalog discovery.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "src/index.ts",
+  "bin": {
+    "magic-genie": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
