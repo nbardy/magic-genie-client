@@ -160,10 +160,20 @@ export class MagicGenieClient {
     let apiKey = config.apiKey;
     let baseUrl = config.baseUrl;
 
-    if (config.envFile && (!apiKey || !baseUrl)) {
-      const vars = await parseEnvFile(config.envFile);
-      apiKey ??= vars.MAGIC_GENIE_API_KEY;
-      baseUrl ??= vars.MAGIC_GENIE_API_BASE_URL;
+    // Try explicit envFile first, then default .magic_genie_env in cwd
+    const envFiles = config.envFile
+      ? [config.envFile]
+      : [".magic_genie_env"];
+
+    for (const envFile of envFiles) {
+      if (apiKey && baseUrl) break;
+      try {
+        const vars = await parseEnvFile(envFile);
+        apiKey ??= vars.MAGIC_GENIE_API_KEY;
+        baseUrl ??= vars.MAGIC_GENIE_API_BASE_URL;
+      } catch {
+        // File doesn't exist — continue to next source
+      }
     }
 
     apiKey ??= process.env.MAGIC_GENIE_API_KEY;

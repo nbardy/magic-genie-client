@@ -63,10 +63,15 @@ var MagicGenieClient = class _MagicGenieClient {
   static async create(config = {}) {
     let apiKey = config.apiKey;
     let baseUrl = config.baseUrl;
-    if (config.envFile && (!apiKey || !baseUrl)) {
-      const vars = await parseEnvFile(config.envFile);
-      apiKey ??= vars.MAGIC_GENIE_API_KEY;
-      baseUrl ??= vars.MAGIC_GENIE_API_BASE_URL;
+    const envFiles = config.envFile ? [config.envFile] : [".magic_genie_env"];
+    for (const envFile of envFiles) {
+      if (apiKey && baseUrl) break;
+      try {
+        const vars = await parseEnvFile(envFile);
+        apiKey ??= vars.MAGIC_GENIE_API_KEY;
+        baseUrl ??= vars.MAGIC_GENIE_API_BASE_URL;
+      } catch {
+      }
     }
     apiKey ??= process.env.MAGIC_GENIE_API_KEY;
     baseUrl ??= process.env.MAGIC_GENIE_API_BASE_URL ?? "https://magicgenie.ai";
