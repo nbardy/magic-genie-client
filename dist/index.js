@@ -171,7 +171,7 @@ var MagicGenieClient = class _MagicGenieClient {
     if ("imageUrl" in input) {
       inputs.image_url = input.imageUrl;
     } else if ("videoUrl" in input) {
-      inputs.image_url = input.videoUrl;
+      inputs.video_url = input.videoUrl;
     } else if ("imageFile" in input) {
       const fileSize = (await stat(input.imageFile)).size;
       if (fileSize <= this.inlineImageMaxBytes) {
@@ -180,7 +180,7 @@ var MagicGenieClient = class _MagicGenieClient {
         inputs.image_url = await this.upload(input.imageFile);
       }
     } else if ("videoFile" in input) {
-      inputs.image_url = await this.upload(input.videoFile);
+      inputs.video_url = await this.upload(input.videoFile);
     }
     const res = await fetch(`${this.baseUrl}/v1/run`, {
       method: "POST",
