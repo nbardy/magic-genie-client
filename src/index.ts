@@ -385,10 +385,23 @@ export class MagicGenieClient {
     const pollIntervalMs = opts.pollIntervalMs ?? DEFAULT_VIDEO_JOB_POLL_INTERVAL_MS;
     const startedAt = Date.now();
 
+    let consecutiveErrors = 0;
     while (Date.now() - startedAt < timeoutMs) {
-      const res = await fetch(`${this.baseUrl}/api/video-jobs/${jobId}`, {
-        headers: this.authorizationHeaders(),
-      });
+      let res: Response;
+      try {
+        res = await fetch(`${this.baseUrl}/api/video-jobs/${jobId}`, {
+          headers: this.authorizationHeaders(),
+        });
+      } catch {
+        // Transient network error — retry up to 3 times before giving up.
+        consecutiveErrors++;
+        if (consecutiveErrors >= 3) {
+          throw new Error(`Video job polling failed after ${consecutiveErrors} consecutive network errors`);
+        }
+        await sleep(pollIntervalMs);
+        continue;
+      }
+      consecutiveErrors = 0;
 
       if (!res.ok) {
         throw new Error(`Video job status failed (${res.status}): ${await res.text()}`);
