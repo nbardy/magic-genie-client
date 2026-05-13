@@ -4,7 +4,7 @@
  * Usage:
  *   bun run examples/easter-merch.ts
  */
-import { MagicGenieClient } from "../src/index.ts";
+import { MagicGenieClient } from "../src/index";
 
 const client = await MagicGenieClient.create({
   envFile: "../../.magic_genie_env",
@@ -21,6 +21,10 @@ const result = await client.run({
 
 console.log("Result:", result);
 console.log("Output:", result.outputUrl);
+
+if (!result.outputUrl) {
+  throw new Error("Run completed without an output URL.");
+}
 
 await client.download(result.outputUrl, "easter-merch-output.jpg");
 console.log("Saved to easter-merch-output.jpg");
